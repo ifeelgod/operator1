@@ -8,6 +8,10 @@ import pypdf
 import glob
 from database import db
 from dotenv import load_dotenv
+import json
+
+from noelle import NoelleAgent
+from emma import EmmaAgent
 
 load_dotenv()
 
@@ -20,6 +24,10 @@ client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
 )
+
+# Initialize Sub-Agents
+noelle_agent = NoelleAgent(api_key=OPENROUTER_API_KEY)
+emma_agent = EmmaAgent(api_key=OPENROUTER_API_KEY)
 
 # Setup Discord bot
 intents = discord.Intents.default()
@@ -50,6 +58,7 @@ async def on_ready():
     print(f'Logged in as {bot.user.name}')
     load_static_vault()
     daily_standup.start()
+    emma_daily_brief.start()
 
 async def get_ai_response(user_id, user_message):
     history = db.get_history(user_id)
@@ -118,6 +127,34 @@ async def save_to_vault(ctx):
     else:
         await ctx.send("Currently only PDF files are supported for dynamic vault saving.")
 
+@bot.command(name='noelle')
+async def call_noelle(ctx, *, request: str):
+    if ctx.author.id != OWNER_ID and OWNER_ID != 0:
+        return
+    await ctx.send("🎨 **Noelle:** Processing your media request...")
+    try:
+        files = await noelle_agent.run(request)
+        if files:
+            discord_files = [discord.File(f) for f in files]
+            await ctx.send("Here are your generated assets:", files=discord_files)
+        else:
+            await ctx.send("Noelle completed the request but no files were generated.")
+    except Exception as e:
+        await ctx.send(f"Error during Noelle generation: {e}")
+
+@bot.command(name='emma')
+async def call_emma(ctx):
+    if ctx.author.id != OWNER_ID and OWNER_ID != 0:
+        return
+    await ctx.send("📋 **Emma:** Fetching your executive briefing...")
+    try:
+        briefing = await emma_agent.generate_briefing()
+        # Chunk if needed
+        for i in range(0, len(briefing), 2000):
+            await ctx.send(briefing[i:i+2000])
+    except Exception as e:
+        await ctx.send(f"Error generating Emma briefing: {e}")
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -134,6 +171,37 @@ async def on_message(message):
         return
         
     async with message.channel.typing():
+        # Step 1: Intent Routing
+        # Use a cheap fast model to detect if this is a media request
+        router_prompt = """
+        You are an intent router. Read the user's message.
+        If the user is asking to generate, create, make, or design an image, picture, graphic, flyer, poster, audio, voiceover, or video, output exactly: 'NOELLE'.
+        Otherwise, output exactly: 'NORMAL'.
+        """
+        router_response = await client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": router_prompt},
+                {"role": "user", "content": message.content}
+            ],
+            max_tokens=10
+        )
+        intent = router_response.choices[0].message.content.strip().upper()
+        
+        if "NOELLE" in intent:
+            await message.channel.send("🎨 **JB:** I'm handing this over to Noelle...")
+            try:
+                files = await noelle_agent.run(message.content)
+                if files:
+                    discord_files = [discord.File(f) for f in files]
+                    await message.channel.send("Here are your generated assets:", files=discord_files)
+                else:
+                    await message.channel.send("Noelle completed the request but no files were generated.")
+            except Exception as e:
+                await message.channel.send(f"Error during Noelle generation: {e}")
+            return
+
+        # Step 2: Normal JB Response
         response = await get_ai_response(message.author.id, message.content)
         
         # Discord messages are limited to 2000 chars, so chunk the response if needed
@@ -156,6 +224,21 @@ async def daily_standup():
             await user.send(f"🌅 **Morning Standup Briefing**\n\n{response}")
     except Exception as e:
         print(f"Error sending standup: {e}")
+
+@tasks.loop(hours=24)
+async def emma_daily_brief():
+    # Configure to run around 6:00 AM. 
+    # For now, it will run exactly 24 hours from startup.
+    if OWNER_ID == 0:
+        return
+    try:
+        user = await bot.fetch_user(OWNER_ID)
+        if user:
+            briefing = await emma_agent.generate_briefing()
+            for i in range(0, len(briefing), 2000):
+                await user.send(briefing[i:i+2000])
+    except Exception as e:
+        print(f"Error sending Emma briefing: {e}")
 
 if __name__ == "__main__":
     if not DISCORD_TOKEN:
