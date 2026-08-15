@@ -46,22 +46,19 @@ class NoelleAgent:
 
     async def generate_media_plan(self, user_request: str) -> MediaPlan:
         """Calls OpenRouter to get the structured Pydantic MediaPlan."""
-        # Note: OpenRouter supports structured outputs with models like gpt-4o or claude-3-5-sonnet.
-        # We will use openai/gpt-4o-mini as a fast, cheap router if available, or just standard JSON mode.
+        # Using standard JSON mode with schema injected to avoid OpenAI strict additionalProperties errors
+        import json
+        schema_str = json.dumps(MediaPlan.model_json_schema())
+        
+        full_system_prompt = self.system_prompt + f"\n\nYou MUST return ONLY valid JSON that matches this exact schema:\n{schema_str}"
+        
         response = await self.client.chat.completions.create(
             model="openai/gpt-4o-mini", # Extremely cheap and fast structured output
             messages=[
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": full_system_prompt},
                 {"role": "user", "content": user_request}
             ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "media_plan",
-                    "schema": MediaPlan.model_json_schema(),
-                    "strict": True
-                }
-            }
+            response_format={"type": "json_object"}
         )
         
         raw_json = response.choices[0].message.content
