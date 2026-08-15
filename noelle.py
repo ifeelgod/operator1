@@ -78,19 +78,27 @@ class NoelleAgent:
             
         url = f"https://pollinations.ai/p/{encoded_prompt}?width={width}&height={height}&nologo=true"
         
+        os.makedirs("vault", exist_ok=True)
         filename = f"vault/noelle_img_{uuid.uuid4().hex[:8]}.png"
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status == 200:
-                    with open(filename, 'wb') as f:
-                        f.write(await resp.read())
-                    return filename
-        return None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        with open(filename, 'wb') as f:
+                            f.write(await resp.read())
+                        return filename
+                    else:
+                        print(f"Pollinations returned status {resp.status}")
+                        return None
+        except Exception as e:
+            print(f"Failed to fetch from Pollinations: {e}")
+            return None
 
     async def execute_audio(self, req: AudioRequest) -> str:
         """Executes Edge-TTS generation and saves to disk."""
         print(f"Generating Audio with voice {req.voice}...")
+        os.makedirs("vault", exist_ok=True)
         filename = f"vault/noelle_audio_{uuid.uuid4().hex[:8]}.mp3"
         communicate = edge_tts.Communicate(req.script, req.voice)
         await communicate.save(filename)
