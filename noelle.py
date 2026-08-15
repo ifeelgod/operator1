@@ -76,7 +76,7 @@ class NoelleAgent:
         elif req.aspect_ratio == "9:16":
             width, height = 720, 1280
             
-        url = f"https://pollinations.ai/p/{encoded_prompt}?width={width}&height={height}&nologo=true"
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true"
         
         os.makedirs("vault", exist_ok=True)
         filename = f"vault/noelle_img_{uuid.uuid4().hex[:8]}.png"
