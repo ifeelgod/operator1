@@ -156,6 +156,45 @@ async def call_emma(ctx):
     except Exception as e:
         await ctx.send(f"Error generating Emma briefing: {e}")
 
+@bot.command(name='standup')
+async def call_standup(ctx):
+    if ctx.author.id != OWNER_ID and OWNER_ID != 0:
+        return
+    await ctx.send("🛠️ **JB:** Generating your internal project standup...")
+    try:
+        prompt = "Generate my daily standup. What are the top 3 moves for today based on recent internal project context?"
+        response = await get_ai_response(ctx.author.id, prompt)
+        for i in range(0, len(response), 2000):
+            await ctx.send(response[i:i+2000])
+    except Exception as e:
+        await ctx.send(f"Error generating standup: {e}")
+
+@bot.command(name='morning')
+async def call_morning(ctx):
+    if ctx.author.id != OWNER_ID and OWNER_ID != 0:
+        return
+    await ctx.send("🌅 **JB:** Good morning! Syncing with Emma to build your ultimate briefing...")
+    try:
+        # Get Emma's Briefing
+        emma_briefing = await emma_agent.generate_briefing()
+        
+        # Ask JB to combine it with his context
+        prompt = f"""
+        I need my ultimate morning briefing. 
+        Here is Emma's external Chief of Staff briefing (from my email/calendar):
+        ---
+        {emma_briefing}
+        ---
+        Combine Emma's external triage with my internal project context. 
+        Format it as one cohesive, executive Morning Briefing. Focus on what I need to accomplish today across both external communications and internal tasks.
+        """
+        response = await get_ai_response(ctx.author.id, prompt)
+        
+        for i in range(0, len(response), 2000):
+            await ctx.send(response[i:i+2000])
+    except Exception as e:
+        await ctx.send(f"Error generating morning briefing: {e}")
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
