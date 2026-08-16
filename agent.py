@@ -57,8 +57,9 @@ def load_static_vault():
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     load_static_vault()
-    daily_standup.start()
-    emma_daily_brief.start()
+    # Disabled automatic daily runs so they only run on manual command
+    # daily_standup.start()
+    # emma_daily_brief.start()
 
 async def get_ai_response(user_id, user_message):
     history = db.get_history(user_id)
