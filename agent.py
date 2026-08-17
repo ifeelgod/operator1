@@ -12,6 +12,7 @@ import json
 
 from noelle import NoelleAgent
 from emma import EmmaAgent
+from linda import LindaAgent
 
 load_dotenv()
 
@@ -28,6 +29,7 @@ client = AsyncOpenAI(
 # Initialize Sub-Agents
 noelle_agent = NoelleAgent(api_key=OPENROUTER_API_KEY)
 emma_agent = EmmaAgent(api_key=OPENROUTER_API_KEY)
+linda_agent = LindaAgent(api_key=OPENROUTER_API_KEY)
 
 # Setup Discord bot
 intents = discord.Intents.default()
@@ -130,19 +132,30 @@ async def save_to_vault(ctx):
         await ctx.send("Currently only PDF files are supported for dynamic vault saving.")
 
 @bot.command(name='noelle')
-async def call_noelle(ctx, *, request: str):
+async def call_noelle(ctx, *, user_request: str):
     if ctx.author.id != OWNER_ID and OWNER_ID != 0:
         return
     await ctx.send("🎨 **Noelle:** Processing your media request...")
     try:
-        files = await noelle_agent.run(request)
+        files = await noelle_agent.run(user_request)
         if files:
             discord_files = [discord.File(f) for f in files]
-            await ctx.send("Here are your generated assets:", files=discord_files)
+            await ctx.send(files=discord_files)
         else:
-            await ctx.send("Noelle completed the request but no files were generated.")
+            await ctx.send("Noelle could not generate the media.")
     except Exception as e:
-        await ctx.send(f"Error during Noelle generation: {e}")
+        await ctx.send(f"Error generating media: {e}")
+
+@bot.command(name='linda')
+async def call_linda(ctx, *, user_request: str):
+    if ctx.author.id != OWNER_ID and OWNER_ID != 0:
+        return
+    await ctx.send("💼 **Linda:** Processing your operations request...")
+    try:
+        response = await linda_agent.run(user_request)
+        await ctx.send(response)
+    except Exception as e:
+        await ctx.send(f"Error contacting Linda: {e}")
 
 @bot.command(name='emma')
 async def call_emma(ctx):
@@ -212,34 +225,37 @@ async def on_message(message):
         return
         
     async with message.channel.typing():
-        # Step 1: Intent Routing
-        # Use a cheap fast model to detect if this is a media request
-        router_prompt = """
-        You are an intent router. Read the user's message.
-        If the user is asking to generate, create, make, or design an image, picture, graphic, flyer, poster, audio, voiceover, or video, output exactly: 'NOELLE'.
-        Otherwise, output exactly: 'NORMAL'.
+        user_message = message.content
+        router_prompt = f"""
+        You are an intent router. 
+        If the user is asking to create, draw, generate, or make an image, video, flyer, ad, or audio voiceover, reply with exactly the word "NOELLE".
+        If the user is asking to log an expense, send an invoice, bill a client, track household spending, or do accounting, reply with exactly the word "LINDA".
+        Otherwise, reply with exactly the word "JB".
+        User message: "{user_message}"
         """
-        router_response = await client.chat.completions.create(
-            model="openai/gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": router_prompt},
-                {"role": "user", "content": message.content}
-            ],
-            max_tokens=10
-        )
-        intent = router_response.choices[0].message.content.strip().upper()
+        router_response = await get_ai_response(OWNER_ID, router_prompt)
+        intent = router_response.strip().upper()
         
         if "NOELLE" in intent:
             await message.channel.send("🎨 **JB:** I'm handing this over to Noelle...")
             try:
-                files = await noelle_agent.run(message.content)
+                files = await noelle_agent.run(user_message)
                 if files:
                     discord_files = [discord.File(f) for f in files]
-                    await message.channel.send("Here are your generated assets:", files=discord_files)
+                    await message.channel.send(files=discord_files)
                 else:
-                    await message.channel.send("Noelle completed the request but no files were generated.")
+                    await message.channel.send("Noelle could not generate the media.")
             except Exception as e:
-                await message.channel.send(f"Error during Noelle generation: {e}")
+                await message.channel.send(f"Error generating media: {e}")
+            return
+            
+        if "LINDA" in intent:
+            await message.channel.send("💼 **Linda:** Processing your operations request...")
+            try:
+                response = await linda_agent.run(user_message)
+                await message.channel.send(response)
+            except Exception as e:
+                await message.channel.send(f"Error contacting Linda: {e}")
             return
 
         # Step 2: Normal JB Response
