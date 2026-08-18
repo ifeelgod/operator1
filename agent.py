@@ -10,6 +10,16 @@ from database import db
 from dotenv import load_dotenv
 import json
 
+def get_agent_menu(agent_name: str) -> str:
+    menus = {
+        "jb": "🛠️ **JB (Operations Manager)**\nI manage internal projects and route your requests.\n**Commands:**\n- `!standup` (Generates an internal project report)\n- `!morning` (The Ultimate Sync: Merges Emma's emails with my internal report)\n- Or just chat with me normally to ask questions about The Vault!",
+        "emma": "📋 **Emma (Chief of Staff)**\nI handle your external inbox and calendar.\n**Commands:**\n- `!emma briefing` (Fetches your daily email triage)",
+        "noelle": "🎨 **Noelle (Media Agent)**\nI handle graphics, flyers, and voiceovers.\n**Commands:**\n- `!noelle draw a flyer for...` (Generates an image)\n- `!noelle record a voiceover...` (Generates MP3 audio)",
+        "linda": "💼 **Linda (Operations)**\nI handle billing, invoices, and expenses via n8n.\n**Commands:**\n- `!linda invoice [email] for [amount]`\n- `!linda log expense [amount] for [category]`",
+        "david": "💻 **David (Software Developer)**\nI handle coding and software development tasks.\n**Commands:**\n- `!david write a script for...`"
+    }
+    return menus.get(agent_name.lower(), "Menu not found.")
+
 from noelle import NoelleAgent
 from emma import EmmaAgent
 from linda import LindaAgent
@@ -58,6 +68,7 @@ def load_static_vault():
 
 @bot.event
 async def on_ready():
+	
     print(f'Logged in as {bot.user.name}')
     load_static_vault()
     # Disabled automatic daily runs so they only run on manual command
@@ -209,8 +220,21 @@ async def call_morning(ctx):
     except Exception as e:
         await ctx.send(f"Error generating morning briefing: {e}")
 
-@bot.event
+@@bot.event
 async def on_message(message):
+    if message.author == bot.user:
+        return
+        
+    bare_msg = message.content.strip().lower()
+    bare_commands = ["jb", "!jb", "emma", "!emma", "noelle", "!noelle", "linda", "!linda", "david", "!david"]
+    
+    # Intercept empty commands to show menus
+    if bare_msg in bare_commands:
+        agent_name = bare_msg.replace("!", "")
+        await message.channel.send(get_agent_menu(agent_name))
+        return
+
+    # Let the rest of the router code continue...
     if message.author == bot.user:
         return
         
