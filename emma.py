@@ -67,6 +67,8 @@ class EmmaAgent:
         
         Schedule Friction Flags
         [List overlapping meetings, back-to-back blocks, or missing prep windows]
+        
+        CRITICAL RULE: If the raw JSON data provided to you is empty, missing, or contains no actionable emails/events, DO NOT invent or hallucinate fake people, emails, or events (like Lydia Cho, Raj Patel, etc). Simply respond with: "(No data found in ingested JSON.)" for those sections.
         """
 
     async def fetch_data_from_n8n(self) -> str:
